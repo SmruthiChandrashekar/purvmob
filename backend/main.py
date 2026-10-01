@@ -92,6 +92,18 @@ async def startup_event():
     # Start SLA monitor background task
     asyncio.create_task(sla_monitor_loop())
 
+@app.get("/health")
+@app.get("/api/health")
+async def health_check():
+    """Enterprise health check endpoint providing service status and component readiness."""
+    return {
+        "status": "healthy",
+        "service": "Puravankara GRM Backend",
+        "version": "1.0.0-enterprise",
+        "rag_ready": is_rag_ready(),
+        "timestamp": time.time()
+    }
+
 @app.get("/api/agents/warmup")
 async def warmup_rag():
     """Endpoint to trigger RAG initialization if not already done."""
@@ -208,12 +220,19 @@ class ComplaintMetadata(BaseModel):
     date: str | None = None
     department: str | None = None
     is_anonymous: bool = False
+    source: Optional[str] = None
+    severity: Optional[str] = None
+    prefilled_severity: Optional[str] = None
+    prefilled_department: Optional[str] = None
 
 class SubmitComplaintRequest(BaseModel):
     description: str
     lang: str = "en"   # ISO 639-1 code: en | hi | kn
     metadata: ComplaintMetadata | None = None
     attachments: list[str] = []
+    source: Optional[str] = None
+    prefilled_severity: Optional[str] = None
+    prefilled_department: Optional[str] = None
 
 class UpdateStatusRequest(BaseModel):
     grievance_id: str
@@ -711,6 +730,7 @@ async def chat_with_agent(request: ChatRequest):
             "chatbot_resolved": chatbot_resolved_val,
             "trigger_form": trigger_form,
             "form_reason": form_reason,
+            "condensed_message": agent_result.get("condensed_message", message_en),
             "original_query": request.message,
         }
     except Exception as e:
@@ -756,12 +776,27 @@ async def submit_complaint(request: SubmitComplaintRequest, user: dict = Depends
         description_en = translate_to_english(description_original)
         clean_desc_en = clean_complaint_description(description_en)
 
-        # 🔹 STEP 2 & 3: CLASSIFY CATEGORY & SEVERITY VIA LLM AGENT
-        sev_res = classify_severity_node({"user_message": clean_desc_en})
-        dept_res = classify_department_node({"user_message": clean_desc_en})
+        # 🔹 STEP 2 & 3: CLASSIFY CATEGORY & SEVERITY
+        # Check if pre-classified from chatbot escalation
+        is_chatbot_escalated = (
+            request.source == "CHATBOT_ESCALATION"
+            or (meta and getattr(meta, "source", None) == "CHATBOT_ESCALATION")
+        )
 
-        category = dept_res.get("department", "CRM")
-        severity = sev_res.get("severity", "MEDIUM").capitalize()
+        if is_chatbot_escalated:
+            raw_sev = request.prefilled_severity or (meta and getattr(meta, "prefilled_severity", None)) or (meta and getattr(meta, "severity", None)) or "LOW"
+            severity = raw_sev.capitalize()
+            category = request.prefilled_department or (meta and getattr(meta, "prefilled_department", None)) or (meta and getattr(meta, "department", None)) or "CRM"
+            # Normalize internal labels
+            if category in ["Internal HR", "Operations", "External Relations", ""]:
+                category = "CRM" if not request.prefilled_department else request.prefilled_department
+            logging.info("Skipping double-classification for CHATBOT_ESCALATION (severity=%s, category=%s)", severity, category)
+        else:
+            # Full LLM Agent classification for direct submissions
+            sev_res = classify_severity_node({"user_message": clean_desc_en})
+            dept_res = classify_department_node({"user_message": clean_desc_en})
+            category = dept_res.get("department", "CRM")
+            severity = sev_res.get("severity", "MEDIUM").capitalize()
 
         # 🔹 STEP 3.5: ESCALATION AGENT (non-blocking)
         # Runs email/SMS notifications in the background
@@ -1536,6 +1571,29 @@ async def get_chat_session_messages(session_id: str, user: dict = Depends(get_cu
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class UpdateSessionRequest(BaseModel):
+    title: Optional[str] = None
+
+@app.patch("/api/chat/session/{session_id}")
+async def update_chat_session(session_id: str, payload: UpdateSessionRequest, user: dict = Depends(get_current_user)):
+    try:
+        user_id = user["user_id"]
+        session = supabase.table("chat_sessions").select("user_id").eq("id", session_id).execute()
+        if not session.data or session.data[0]["user_id"] != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized to modify this session")
+            
+        update_data = {}
+        if payload.title is not None and payload.title.strip():
+            update_data["title"] = payload.title.strip()
+            
+        if update_data:
+            supabase.table("chat_sessions").update(update_data).eq("id", session_id).execute()
+        return {"status": "success"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/api/chat/session/{session_id}")
 async def delete_chat_session(session_id: str, user: dict = Depends(get_current_user)):
     try:
@@ -1703,6 +1761,31 @@ async def upload_avatar(
             pass
 
         return {"status": "success", "avatar_url": public_url}
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── EVALUATION METRICS ENDPOINT ───────────────────────────────────────────
+
+@app.get("/api/admin/evaluation-metrics")
+async def get_evaluation_metrics(user: dict = Depends(require_super_admin)):
+    """
+    Serve the latest comprehensive evaluation metrics report.
+    Reads the pre-generated results/full_metrics_report.json file.
+    To regenerate, run: python backend/tests/run_all_metrics.py
+    """
+    try:
+        report_path = os.path.join(BASE_DIR, "results", "full_metrics_report.json")
+        if not os.path.exists(report_path):
+            raise HTTPException(
+                status_code=404,
+                detail="No evaluation report found. Run 'python backend/tests/run_all_metrics.py' to generate one."
+            )
+        with open(report_path, "r", encoding="utf-8") as f:
+            report = json.load(f)
+        return report
     except Exception as e:
         if isinstance(e, HTTPException):
             raise e

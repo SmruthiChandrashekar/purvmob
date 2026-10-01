@@ -13,26 +13,56 @@ Also determines whether the chatbot successfully resolved the query
 (sets chatbot_resolved flag for downstream LOW → L1 handoff logic).
 """
 
+import re
 import logging
 from backend.agent.state import GrievanceState
 
 logger = logging.getLogger(__name__)
 
 
-def _call_llm_with_auto_summary(client, messages: list[dict], max_tokens: int = 1000) -> str:
+def _sanitize_response(text: str) -> str:
     """
-    Generate response using Groq LLM with truncation protection.
-    If the model hits max_tokens (finish_reason == 'length') and cuts off,
-    it automatically summarizes and completes the answer cleanly.
+    Remove any hallucinated/dummy phone numbers or placeholder contact details
+    from LLM-generated text before sending to the user.
     """
+    if not text:
+        return text
+
+    # Dummy sequences & unverified phone number patterns (e.g. 9876543210, 1234567890, 1800-xxx)
+    # Match sequences of 10 digits starting with Indian mobile prefixes (6-9) or standard 1800 toll-free patterns
+    dummy_patterns = [
+        r'\b9876543210\b',
+        r'\b1234567890\b',
+        r'\b0123456789\b',
+        r'\b(?:\+?91[- ]?)?[6-9]\d{9}\b',
+        r'\b1800[-\s]?\d{3}[-\s]?\d{4}\b',
+    ]
+    for pat in dummy_patterns:
+        text = re.sub(pat, "the Puravankara Resident App / Helpdesk", text)
+
+    # Clean up any awkward phrasing resulting from regex substitutions like "at the Puravankara Resident App"
+    text = re.sub(r'\bat the Puravankara Resident App / Helpdesk\b', 'via the Puravankara Resident App or Facility Management desk', text)
+    text = re.sub(r'\bat the resident app\b', 'via the resident app', text, flags=re.IGNORECASE)
+
+    return text
+
+
+
+def _call_llm_with_auto_summary(client, model_name: str, messages: list, max_tokens: int = 1000) -> str:
+    """
+    Call LLM with auto-summarization if token limit is reached.
+    Uses temperature=0.0 to prevent hallucination drift.
+    """
+    from backend.agent.llm import extract_response_text
+
     llm_response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
+        model=model_name,
         messages=messages,
         max_tokens=max_tokens,
-        temperature=0.2,
+        temperature=0.0,
     )
     choice = llm_response.choices[0]
-    content = choice.message.content.strip()
+    content = extract_response_text(choice.message).strip()
 
     # If the response reached the token limit mid-sentence, summarize cleanly
     if choice.finish_reason == "length":
@@ -46,12 +76,12 @@ def _call_llm_with_auto_summary(client, messages: list[dict], max_tokens: int = 
                 {"role": "user", "content": content}
             ]
             sum_res = client.chat.completions.create(
-                model="openai/gpt-oss-120b",
+                model=model_name,
                 messages=summary_messages,
                 max_tokens=500,
-                temperature=0.2,
+                temperature=0.0,
             )
-            content = sum_res.choices[0].message.content.strip()
+            content = extract_response_text(sum_res.choices[0].message).strip()
         except Exception as sum_err:
             logger.error("Auto-summarization fallback failed: %s", sum_err)
 
@@ -71,10 +101,9 @@ def generate_response_node(state: GrievanceState) -> dict:
 
     Returns partial state update with 'response' and 'chatbot_resolved'.
     """
-    from groq import Groq
-    import os
+    from backend.agent.llm import get_llm
 
-    client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+    client, model_name = get_llm()
     user_message = state.get("user_message", "")
     messages = state.get("messages", [])
     policy_answer = state.get("policy_answer", "")
@@ -113,43 +142,14 @@ def generate_response_node(state: GrievanceState) -> dict:
         primary_policy = sources[0].get("source", "Puravankara Policy")
 
     # ── CASE 1: POLICY MATCH FOUND ─────────────────────────────────────────
+    # Use the RAG-grounded answer DIRECTLY. No second LLM call — this
+    # eliminates the biggest hallucination vector (re-interpretation drift).
     if has_policy_match:
         source_type = "POLICY"
         can_escalate = (intent == "GRIEVANCE")
         chatbot_resolved = True
 
-        system_prompt = f"""You are Purva, the official AI Policy Assistant for Puravankara.
-
-CONVERSATION HISTORY:
-{history_text}
-
-RETRIEVED PURAVANKARA POLICY CONTEXT:
-Primary Policy: {primary_policy}
-{policy_answer}
-
-YOUR TASK:
-1. Answer the user's message using the retrieved Puravankara policy information above.
-2. In your response, EXPLICITLY refer to the relevant policy by name (e.g., "According to Puravankara's {primary_policy}..." or "As per the {primary_policy}...").
-3. Be conversational, professional, and clear. Use bullet points for steps, criteria, or lists.
-4. If the user is asking a follow-up, seamlessly connect it with prior conversation context.
-5. Do NOT invent policies not in the retrieved text.
-6. CONCISENESS & COMPLETION: Keep your response focused and well-structured. Always ensure all sentences and bullet points are fully completed."""
-
-        prompt = f"User: {user_message}"
-
-        try:
-            response = _call_llm_with_auto_summary(
-                client,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": prompt},
-                ],
-                max_tokens=1000,
-            )
-            response += source_citations
-        except Exception as e:
-            logger.error("Policy response generation failed: %s", e)
-            response = f"According to Puravankara's {primary_policy}:\n\n{policy_answer}{source_citations}"
+        response = f"According to Puravankara's {primary_policy}:\n\n{policy_answer}{source_citations}"
 
     # ── CASE 2: NO POLICY MATCH (GREETING, NON-POLICY QUERY, OR LOW GRIEVANCE) ───
     else:
@@ -180,45 +180,58 @@ Respond warmly to the user's greeting or pleasantry and let them know you are he
                     dept = "CRM"
             state["department"] = dept
 
-            system_prompt = f"""You are Purva, the empathetic and professional AI Grievance Companion for Puravankara.
+            system_prompt = f"""### ROLE & SCOPE ASSIGNMENT:
+You are Purva, the empathetic and professional AI Grievance Assistant for Puravankara Enterprise. You provide supportive intake guidance and triage, strictly bound to verified community norms and workplace standards.
 
-CONVERSATION HISTORY:
+### CONVERSATION HISTORY:
 {history_text}
 
-The user is reporting a concern/grievance:
+### USER CONCERN:
 "{user_message}"
 
-YOUR TASK:
-1. Acknowledge the user's issue with genuine empathy and professional reassurance.
-2. Provide a practical, constructive explanation drawing upon standard corporate, operational, and site practices:
-   - Explain standard operating norms, schedules, inspection procedures, or common administrative factors relevant to the issue.
-   - Offer concrete steps the user can immediately take or verify to help resolve or understand the situation.
-   - Reassure them that if the issue persists or exceeds standard norms, they can use the resolution guidance button below to lodge a formal ticket for departmental investigation.
-3. Be reassuring, polite, and professional.
-4. CONCISENESS & COMPLETION: Keep your answer crisp and concise (under 250 words). Avoid overly wide tables; prefer bullet points. Always conclude all sentences completely."""
+### SPECIFICITY & STRUCTURE:
+1. Acknowledge the user's issue with genuine empathy and professional reassurance in 1-2 sentences.
+2. Provide a practical, constructive explanation (maximum 150-200 words):
+   - Address the specific concern raised by the user directly. Do NOT assume unrelated topics (e.g. do NOT invent noise or repairs unless explicitly mentioned).
+   - If a resident raises a concern regarding other residents' background or profession (e.g. healthcare workers/doctors), clarify courteously that residential complexes welcome diverse residents in accordance with standard community living guidelines and equal housing principles.
+   - Explain standard operating norms and common administrative factors.
+   - Offer 2-3 concrete steps the user can verify or take.
+   - Inform the user that if this does not resolve their concern, they can click the resolution guidance button below to lodge a formal ticket for CRM/management review.
+
+### INSTRUCTIONAL DOS & DON'TS:
+- DO refer users strictly to the official "Puravankara Resident App" or "on-site Facility Management desk".
+- DO NOT invent, hallucinate, or output dummy phone numbers (e.g. '9876543210', '1800-xxx'), placeholder emails, or fictional personnel names.
+- DO ensure all sentences are completely finished."""
         else:
-            # Query not in official policy: Answer thoroughly using General Knowledge (GK)
+            # Query not in official policy: provide a cautious general answer
             can_escalate = False
             chatbot_resolved = True
-            system_prompt = f"""You are Purva, an intelligent, helpful corporate AI Assistant for Puravankara.
+            system_prompt = f"""### ROLE & SCOPE ASSIGNMENT:
+You are Purva, the official AI Assistant for Puravankara Enterprise. You are answering a general procedural, informational, or workplace question not formally indexed in the company policy handbook.
 
-CONVERSATION HISTORY:
+### CONVERSATION HISTORY:
 {history_text}
 
-The user is asking a general informational, procedural, or workplace question:
+### USER QUESTION:
 "{user_message}"
 
-This specific topic does not have a formal Puravankara policy handbook clause, but you should answer it thoroughly, accurately, and professionally using GENERAL KNOWLEDGE (GK) and corporate best practices:
-1. Provide a direct, helpful, and informative answer based on standard workplace practices, industry standards, or general knowledge.
-2. If the topic involves company-specific variables (like payroll records, specific team assignments, or internal logins), provide the standard explanation and suggest the appropriate channel (e.g. HR helpdesk, IT service desk, or employee portal).
-3. Do NOT claim "policy documents are missing" or ask the user to submit a formal grievance for simple questions. Answer constructively.
-4. CONCISENESS & COMPLETION: Keep your answer concise and crisp. Summarize key points and ensure every sentence is fully completed."""
+### SPECIFICITY & GROUNDING CONSTRAINTS:
+1. Prefix your answer with: "While this isn't covered in Puravankara's official policy documents, here is some general guidance:"
+2. Keep your answer SHORT, focused, and under 120 words. Stick strictly to well-established, universal facts.
+3. If the question involves company-specific variables (payroll amounts, team assignments, internal logins, specific staff contacts), do NOT guess. Explicitly state: "For this specific request, please reach out to your HR helpdesk or department coordinator."
+
+### INSTRUCTIONAL DOS & DON'TS:
+- DO provide direct, professional, and factual steps.
+- DO NOT fabricate contact numbers, emails, employee names, or internal portal URLs.
+- DO NOT claim to have access to confidential or unindexed company records.
+- DO ensure all sentences end with proper punctuation and full completion."""
 
         prompt = f"User: {user_message}"
 
         try:
             response = _call_llm_with_auto_summary(
                 client,
+                model_name,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
@@ -228,6 +241,9 @@ This specific topic does not have a formal Puravankara policy handbook clause, b
         except Exception as e:
             logger.error("General response generation failed: %s", e)
             response = "I'm here to assist you. While this specific detail is not outlined in our standard policies, you can verify this through your employee self-service portal or with your department coordinator."
+
+    # Post-process sanitization to strip any hallucinated phone numbers or placeholder contacts
+    response = _sanitize_response(response)
 
     logger.info(
         "Generated conversational response (intent=%s, source_type=%s, can_escalate=%s)",
