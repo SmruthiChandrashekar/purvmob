@@ -10,15 +10,16 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { colors, spacing, radius } from '../theme';
+import { colors, spacing, radius, shadows } from '../theme';
 import Header from '../components/Header';
 import { sendChatMessage } from '../services/api';
 
 const SUGGESTED_PROMPTS = [
   'What is the POSH policy?',
   'Can I report a grievance anonymously?',
-  'What is the standard resolution timeline?',
-  'Who investigates high severity complaints?',
+  'What qualifies as harassment?',
+  'What is the resolution timeline?',
+  'Who investigates high severity cases?',
 ];
 
 export default function PolicyAssistantScreen({ onNavigateToLodge }) {
@@ -26,7 +27,7 @@ export default function PolicyAssistantScreen({ onNavigateToLodge }) {
     {
       id: 'greeting',
       isBot: true,
-      text: 'Hello! I am the Puravankara Policy & Grievance AI Assistant. You can ask me questions about internal policies, POSH, HR guidelines, or get immediate help logging a concern.',
+      text: 'Namaste & Welcome. I am Purva AI, your dedicated Puravankara Policy & Grievance assistant. Ask me questions about company policies, HR compliance, POSH guidelines, or get immediate support lodging a concern.',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -55,8 +56,8 @@ export default function PolicyAssistantScreen({ onNavigateToLodge }) {
 
     try {
       const data = await sendChatMessage(textToSend, 'en');
-      let botText = data.response || "I couldn't locate specific policy information on that.";
-      
+      let botText = data.response || "I couldn't locate specific company policy clauses on that query.";
+
       const botMsg = {
         id: `b-${Date.now()}`,
         isBot: true,
@@ -78,7 +79,7 @@ export default function PolicyAssistantScreen({ onNavigateToLodge }) {
           id: `err-${Date.now()}`,
           isBot: true,
           isError: true,
-          text: `⚠️ Unable to connect to backend service. Check server connection in Settings.\n(${err.message})`,
+          text: `⚠️ Unable to reach policy RAG service. Verify backend URL in Settings.\n(${err.message})`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
@@ -87,17 +88,17 @@ export default function PolicyAssistantScreen({ onNavigateToLodge }) {
     }
   };
 
-  const getSeverityColor = (sev) => {
+  const getSeverityStyle = (sev) => {
     switch (sev) {
       case 'critical':
       case 'high':
-        return colors.danger;
+        return { border: colors.danger, bg: '#fde8ea', text: colors.danger };
       case 'medium':
-        return colors.warning;
+        return { border: colors.warning, bg: '#fef3c7', text: colors.warning };
       case 'low':
-        return colors.success;
+        return { border: colors.success, bg: '#ecfdf5', text: colors.success };
       default:
-        return colors.primary;
+        return { border: colors.brandRoyal, bg: colors.surfaceAlt, text: colors.brandRoyal };
     }
   };
 
@@ -109,12 +110,16 @@ export default function PolicyAssistantScreen({ onNavigateToLodge }) {
     >
       <Header
         title="Policy Assistant"
-        subtitle="RAG-Powered HR & Compliance Intelligence"
+        subtitle="RAG Compliance & Policy Guidance"
       />
 
-      {/* Suggested prompts carousel */}
+      {/* Suggested prompts carousel matching website pill buttons */}
       <View style={styles.promptBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promptScroll}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.promptScroll}
+        >
           {SUGGESTED_PROMPTS.map((prompt, idx) => (
             <TouchableOpacity
               key={idx}
@@ -122,7 +127,7 @@ export default function PolicyAssistantScreen({ onNavigateToLodge }) {
               onPress={() => handleSend(prompt)}
               activeOpacity={0.7}
             >
-              <Text style={styles.promptText}>💬 {prompt}</Text>
+              <Text style={styles.promptText}>{prompt}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -155,14 +160,21 @@ export default function PolicyAssistantScreen({ onNavigateToLodge }) {
                 item.isError && styles.errorBubble,
               ]}
             >
+              {item.isBot && (
+                <View style={styles.botBadgeRow}>
+                  <Text style={styles.botName}>Purva AI</Text>
+                  <View style={styles.verifiedDot} />
+                </View>
+              )}
+
               <Text style={[styles.bubbleText, item.isBot ? styles.botText : styles.userText]}>
                 {item.text}
               </Text>
 
-              {/* Citations if available */}
+              {/* Source citations */}
               {item.sources && item.sources.length > 0 && (
                 <View style={styles.sourcesBox}>
-                  <Text style={styles.sourcesHeader}>📑 Cited Policies:</Text>
+                  <Text style={styles.sourcesHeader}>📑 Verified References:</Text>
                   {item.sources.map((src, sIdx) => (
                     <Text key={sIdx} style={styles.sourceItem}>
                       • {src.source} {src.page ? `(p. ${src.page})` : ''}
@@ -171,17 +183,22 @@ export default function PolicyAssistantScreen({ onNavigateToLodge }) {
                 </View>
               )}
 
-              {/* Severity & Routing Tag */}
+              {/* Severity & Department Badges */}
               {item.severity && (
                 <View style={styles.metaRow}>
-                  <View style={[styles.sevTag, { borderColor: getSeverityColor(item.severity) }]}>
-                    <Text style={[styles.sevTagText, { color: getSeverityColor(item.severity) }]}>
-                      Severity: {item.severity.toUpperCase()}
-                    </Text>
-                  </View>
+                  {(() => {
+                    const st = getSeverityStyle(item.severity);
+                    return (
+                      <View style={[styles.sevTag, { borderColor: st.border, backgroundColor: st.bg }]}>
+                        <Text style={[styles.sevTagText, { color: st.text }]}>
+                          Severity: {item.severity.toUpperCase()}
+                        </Text>
+                      </View>
+                    );
+                  })()}
                   {item.department ? (
                     <View style={styles.deptTag}>
-                      <Text style={styles.deptTagText}>Dept: {item.department}</Text>
+                      <Text style={styles.deptTagText}>Routed: {item.department}</Text>
                     </View>
                   ) : null}
                 </View>
@@ -191,17 +208,22 @@ export default function PolicyAssistantScreen({ onNavigateToLodge }) {
               {(item.trigger_form || item.severity === 'high' || item.severity === 'critical') && (
                 <TouchableOpacity
                   style={styles.actionButton}
-                  onPress={() => onNavigateToLodge?.({
-                    description: item.text,
-                    severity: item.severity,
-                    department: item.department,
-                  })}
+                  onPress={() =>
+                    onNavigateToLodge?.({
+                      description: item.text,
+                      severity: item.severity,
+                      department: item.department,
+                    })
+                  }
+                  activeOpacity={0.85}
                 >
-                  <Text style={styles.actionButtonText}>📋 Lodge Formal Grievance</Text>
+                  <Text style={styles.actionButtonText}>📋 Lodge Formal Grievance with this info</Text>
                 </TouchableOpacity>
               )}
 
-              <Text style={styles.timestamp}>{item.timestamp}</Text>
+              <Text style={[styles.timestamp, item.isBot ? styles.timestampBot : styles.timestampUser]}>
+                {item.timestamp}
+              </Text>
             </View>
           </View>
         ))}
@@ -212,8 +234,8 @@ export default function PolicyAssistantScreen({ onNavigateToLodge }) {
               <Text style={styles.avatarText}>🤖</Text>
             </View>
             <View style={[styles.bubble, styles.botBubble, styles.loadingBubble]}>
-              <ActivityIndicator color={colors.accent} size="small" />
-              <Text style={styles.loadingText}>Searching compliance documents...</Text>
+              <ActivityIndicator color={colors.brandRoyal} size="small" />
+              <Text style={styles.loadingText}>Searching Puravankara policies & guidelines...</Text>
             </View>
           </View>
         )}
@@ -223,7 +245,7 @@ export default function PolicyAssistantScreen({ onNavigateToLodge }) {
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.textInput}
-          placeholder="Ask a policy question or describe an issue..."
+          placeholder="Ask policy questions or describe an issue..."
           placeholderTextColor={colors.textMuted}
           value={inputText}
           onChangeText={setInputText}
@@ -259,16 +281,17 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   promptChip: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radius.full,
+    paddingVertical: 7,
+    borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border,
   },
   promptText: {
-    color: colors.textSecondary,
+    color: colors.brandRoyal,
     fontSize: 12,
+    fontWeight: '600',
   },
   messagesContainer: {
     flex: 1,
@@ -293,11 +316,12 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadows.card,
   },
   avatarText: {
     fontSize: 16,
@@ -305,47 +329,69 @@ const styles = StyleSheet.create({
   bubble: {
     maxWidth: '82%',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.sm + 4,
     borderRadius: radius.lg,
   },
   botBubble: {
-    backgroundColor: colors.botBubble,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xs,
     borderWidth: 1,
     borderColor: colors.border,
+    ...shadows.card,
   },
   userBubble: {
     backgroundColor: colors.userBubble,
     borderTopRightRadius: radius.xs,
+    ...shadows.card,
   },
   errorBubble: {
     borderColor: colors.danger,
-    backgroundColor: '#2D1515',
+    backgroundColor: '#fff1f2',
+  },
+  botBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  botName: {
+    color: colors.brandRoyal,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  verifiedDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.success,
   },
   bubbleText: {
     fontSize: 14,
-    lineHeight: 21,
+    lineHeight: 22,
   },
   botText: {
     color: colors.text,
   },
   userText: {
-    color: '#FFFFFF',
+    color: colors.userBubbleText,
   },
   sourcesBox: {
     marginTop: spacing.sm,
     paddingTop: spacing.xs,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.borderLight,
+    backgroundColor: '#f8fafc',
+    padding: spacing.xs + 2,
+    borderRadius: radius.sm,
   },
   sourcesHeader: {
-    color: colors.accent,
+    color: colors.brandRoyal,
     fontSize: 11,
     fontWeight: '700',
     marginBottom: 2,
   },
   sourceItem: {
-    color: colors.textMuted,
+    color: colors.textSecondary,
     fontSize: 11,
     lineHeight: 16,
   },
@@ -357,43 +403,51 @@ const styles = StyleSheet.create({
   },
   sevTag: {
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    backgroundColor: 'rgba(0,0,0,0.2)',
   },
   sevTagText: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   deptTag: {
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surface,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   deptTagText: {
     color: colors.textSecondary,
     fontSize: 10,
+    fontWeight: '600',
   },
   actionButton: {
-    marginTop: spacing.sm,
-    backgroundColor: colors.accent,
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.sm,
+    marginTop: spacing.sm + 2,
+    backgroundColor: colors.brandRed,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     borderRadius: radius.md,
     alignItems: 'center',
+    ...shadows.accent,
   },
   actionButtonText: {
-    color: '#000000',
+    color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 12,
   },
   timestamp: {
-    color: colors.textMuted,
-    fontSize: 9,
+    fontSize: 10,
     alignSelf: 'flex-end',
-    marginTop: 4,
+    marginTop: 5,
+  },
+  timestampBot: {
+    color: colors.textMuted,
+  },
+  timestampUser: {
+    color: 'rgba(255, 255, 255, 0.75)',
   },
   loadingBubble: {
     flexDirection: 'row',
@@ -407,41 +461,42 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    padding: spacing.sm,
+    padding: spacing.sm + 2,
     paddingHorizontal: spacing.md,
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     gap: spacing.sm,
+    ...shadows.card,
   },
   textInput: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 42,
     maxHeight: 100,
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
+    backgroundColor: colors.background,
+    borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
-    paddingVertical: 8,
+    paddingVertical: 10,
     color: colors.text,
     fontSize: 14,
     borderWidth: 1,
     borderColor: colors.border,
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: colors.brandNavy,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sendDisabled: {
-    backgroundColor: colors.surface,
-    opacity: 0.5,
+    backgroundColor: colors.surfaceAlt,
+    opacity: 0.6,
   },
   sendIcon: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
   },
 });

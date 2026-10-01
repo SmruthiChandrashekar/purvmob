@@ -1,21 +1,44 @@
+// Puravankara Brand Design System (matching frontend/src/styles/global.css)
 export const colors = {
-  background: '#0B0F19',
-  surface: '#131B2E',
-  card: '#1E293B',
-  border: '#334155',
-  primary: '#3B82F6',
-  primaryDark: '#1D4ED8',
-  accent: '#F59E0B',
-  accentHover: '#D97706',
-  text: '#F8FAFC',
-  textMuted: '#94A3B8',
-  textSecondary: '#CBD5E1',
-  success: '#10B981',
-  warning: '#F59E0B',
-  danger: '#EF4444',
-  chipBg: '#1E293B',
-  userBubble: '#2563EB',
-  botBubble: '#1E293B',
+  // Brand Anchors
+  brandNavy: '#00234f',
+  brandNavyDark: '#001838',
+  brandRoyal: '#0b3d82',
+  brandRed: '#d3213a',
+  brandRedHover: '#b01830',
+
+  // Surfaces & Backgrounds (Crisp, modern website canvas)
+  background: '#f8f9fb',
+  surface: '#ffffff',
+  surfaceAlt: '#eef2f8',
+  card: '#ffffff',
+  border: '#d8dfeb',
+  borderLight: '#eef2f8',
+
+  // Typography
+  text: '#141a2b',
+  textSecondary: '#334155',
+  textMuted: '#586179',
+  textLight: '#ffffff',
+
+  // Status & Accents
+  primary: '#00234f',
+  accent: '#d3213a',
+  success: '#187a50',
+  warning: '#a86a0c',
+  danger: '#d3213a',
+  info: '#0b3d82',
+
+  // Chatbot Bubbles
+  userBubble: '#00234f',
+  userBubbleText: '#ffffff',
+  botBubble: '#ffffff',
+  botBubbleText: '#141a2b',
+
+  // Stakeholder Card Badges
+  stakeholderInternal: '#0b3d82',
+  stakeholderContract: '#187a50',
+  stakeholderExternal: '#d3213a',
 };
 
 export const spacing = {
@@ -27,9 +50,34 @@ export const spacing = {
 };
 
 export const radius = {
+  xs: 4,
   sm: 8,
   md: 12,
-  lg: 16,
+  lg: 18,
   xl: 24,
-  full: 9999,
+  pill: 9999,
+};
+
+export const shadows = {
+  card: {
+    shadowColor: '#00234f',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  hover: {
+    shadowColor: '#00234f',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  accent: {
+    shadowColor: '#d3213a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 3,
+  },
 };

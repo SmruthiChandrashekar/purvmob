@@ -10,17 +10,17 @@ import {
   Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { colors, spacing, radius } from '../theme';
+import { colors, spacing, radius, shadows } from '../theme';
 import Header from '../components/Header';
 import { supabase } from '../services/supabase';
 
 const TRACKING_HISTORY_KEY = '@purva_recent_tracking_ids';
 
 const STATUS_STAGES = [
-  { key: 'Open', label: 'Submitted', desc: 'Registered in compliance system' },
-  { key: 'Triaged', label: 'Triaged', desc: 'Assigned to department handler' },
-  { key: 'In Progress', label: 'Investigating', desc: 'Under active inquiry & review' },
-  { key: 'Resolved', label: 'Resolved', desc: 'Resolution approved & logged' },
+  { key: 'Open', label: 'Received & Logged', desc: 'Securely recorded in the Puravankara central ledger' },
+  { key: 'Triaged', label: 'Routed & Triaged', desc: 'Assigned to designated department handler & SLA locked' },
+  { key: 'In Progress', label: 'Investigating', desc: 'Active inquiry, fact-finding, and management review' },
+  { key: 'Resolved', label: 'Resolved & Closed', desc: 'Formal remedy executed and verified under compliance' },
 ];
 
 export default function TrackScreen({ initialTrackingId }) {
@@ -55,7 +55,7 @@ export default function TrackScreen({ initialTrackingId }) {
   const handleSearch = async (overrideId = null) => {
     const rawId = (overrideId || searchId).trim();
     if (!rawId) {
-      Alert.alert('Tracking ID Required', 'Please enter your grievance UUID or tracking reference.');
+      Alert.alert('Tracking Reference Needed', 'Please enter your grievance UUID or tracking reference.');
       return;
     }
 
@@ -64,14 +64,12 @@ export default function TrackScreen({ initialTrackingId }) {
     setGrievance(null);
 
     try {
-      // 1. Exact match
       let { data, error } = await supabase
         .from('grievances')
         .select('*')
         .eq('grievance_id', rawId)
         .maybeSingle();
 
-      // 2. Prefix match fallback
       if (!data && !error) {
         const prefixRes = await supabase
           .from('grievances')
@@ -85,13 +83,13 @@ export default function TrackScreen({ initialTrackingId }) {
       }
 
       if (error || !data) {
-        setErrorMsg(`No grievance found matching ID: "${rawId}". Please double-check the tracking ID.`);
+        setErrorMsg(`No record found matching: "${rawId}". Please verify your reference ID.`);
       } else {
         setGrievance(data);
         saveRecentId(data.grievance_id);
       }
     } catch (err) {
-      setErrorMsg(`Lookup failed: ${err.message}`);
+      setErrorMsg(`Connection error: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -105,29 +103,35 @@ export default function TrackScreen({ initialTrackingId }) {
     return 0;
   };
 
-  const getSeverityBadgeColor = (sev) => {
+  const getSeverityBadge = (sev) => {
     const s = (sev || '').toLowerCase();
-    if (s === 'critical' || s === 'high') return colors.danger;
-    if (s === 'medium') return colors.warning;
-    if (s === 'low') return colors.success;
-    return colors.primary;
+    if (s === 'critical' || s === 'high') {
+      return { border: colors.danger, bg: '#fde8ea', text: colors.danger };
+    }
+    if (s === 'medium') {
+      return { border: colors.warning, bg: '#fef3c7', text: colors.warning };
+    }
+    if (s === 'low') {
+      return { border: colors.success, bg: '#ecfdf5', text: colors.success };
+    }
+    return { border: colors.brandRoyal, bg: colors.surfaceAlt, text: colors.brandRoyal };
   };
 
   return (
     <View style={styles.container}>
       <Header
-        title="Track Status"
-        subtitle="Real-time Investigation & Resolution Timeline"
+        title="Track Grievance"
+        subtitle="Transparent Multi-Stage Resolution Journey"
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Search Bar */}
+        {/* Search Card */}
         <View style={styles.searchCard}>
-          <Text style={styles.searchLabel}>ENTER TRACKING ID</Text>
+          <Text style={styles.searchLabel}>ENTER TRACKING CODE OR UUID</Text>
           <View style={styles.searchRow}>
             <TextInput
               style={styles.searchInput}
-              placeholder="e.g. 8f4b62d8-..."
+              placeholder="e.g. e4d31a54-..."
               placeholderTextColor={colors.textMuted}
               value={searchId}
               onChangeText={setSearchId}
@@ -138,20 +142,20 @@ export default function TrackScreen({ initialTrackingId }) {
               style={[styles.searchButton, isLoading && styles.searchDisabled]}
               onPress={() => handleSearch()}
               disabled={isLoading}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
               {isLoading ? (
-                <ActivityIndicator color="#000000" size="small" />
+                <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.searchButtonText}>Search</Text>
+                <Text style={styles.searchButtonText}>Track</Text>
               )}
             </TouchableOpacity>
           </View>
 
-          {/* Quick history chips */}
+          {/* Quick history */}
           {recentIds.length > 0 && (
             <View style={styles.historyContainer}>
-              <Text style={styles.historyLabel}>Recent:</Text>
+              <Text style={styles.historyLabel}>Recent Searches:</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.historyList}>
                 {recentIds.map((item) => (
                   <TouchableOpacity
@@ -170,7 +174,7 @@ export default function TrackScreen({ initialTrackingId }) {
           )}
         </View>
 
-        {/* Error notice */}
+        {/* Error message */}
         {errorMsg && (
           <View style={styles.errorCard}>
             <Text style={styles.errorIcon}>⚠️</Text>
@@ -181,28 +185,18 @@ export default function TrackScreen({ initialTrackingId }) {
         {/* Grievance Result Card */}
         {grievance && (
           <View style={styles.resultCard}>
-            {/* Header info */}
             <View style={styles.resultHeader}>
               <View>
                 <Text style={styles.ticketId} selectable>
                   ID: {grievance.grievance_id}
                 </Text>
                 <Text style={styles.ticketDate}>
-                  Submitted: {new Date(grievance.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                  Logged on {new Date(grievance.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
                 </Text>
               </View>
-              <View
-                style={[
-                  styles.statusBadge,
-                  { borderColor: getSeverityBadgeColor(grievance.severity) },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusBadgeText,
-                    { color: getSeverityBadgeColor(grievance.severity) },
-                  ]}
-                >
+
+              <View style={[styles.statusBadge, { backgroundColor: '#ecfdf5', borderColor: colors.success }]}>
+                <Text style={[styles.statusBadgeText, { color: colors.success }]}>
                   {grievance.status || 'Open'}
                 </Text>
               </View>
@@ -211,14 +205,19 @@ export default function TrackScreen({ initialTrackingId }) {
             {/* Department & Severity Row */}
             <View style={styles.metaBox}>
               <View style={styles.metaItem}>
-                <Text style={styles.metaLabel}>DEPARTMENT</Text>
-                <Text style={styles.metaVal}>{grievance.department || 'General'}</Text>
+                <Text style={styles.metaLabel}>ASSIGNED DEPT</Text>
+                <Text style={styles.metaVal}>{grievance.department || 'Operations'}</Text>
               </View>
               <View style={styles.metaItem}>
                 <Text style={styles.metaLabel}>SEVERITY</Text>
-                <Text style={[styles.metaVal, { color: getSeverityBadgeColor(grievance.severity) }]}>
-                  {grievance.severity ? grievance.severity.toUpperCase() : 'STANDARD'}
-                </Text>
+                {(() => {
+                  const b = getSeverityBadge(grievance.severity);
+                  return (
+                    <Text style={[styles.metaVal, { color: b.text }]}>
+                      {grievance.severity ? grievance.severity.toUpperCase() : 'STANDARD'}
+                    </Text>
+                  );
+                })()}
               </View>
               <View style={styles.metaItem}>
                 <Text style={styles.metaLabel}>SLA TARGET</Text>
@@ -226,8 +225,8 @@ export default function TrackScreen({ initialTrackingId }) {
               </View>
             </View>
 
-            {/* Progress Stepper Timeline */}
-            <Text style={styles.timelineTitle}>STATUS TIMELINE</Text>
+            {/* Stepper Timeline */}
+            <Text style={styles.timelineTitle}>RESOLUTION JOURNEY</Text>
             <View style={styles.timeline}>
               {STATUS_STAGES.map((stage, idx) => {
                 const currentIdx = getStageIndex(grievance.status);
@@ -261,6 +260,7 @@ export default function TrackScreen({ initialTrackingId }) {
                         style={[
                           styles.stepLabel,
                           isCurrent && styles.stepLabelCurrent,
+                          isPassed && !isCurrent && styles.stepLabelPassed,
                         ]}
                       >
                         {stage.label}
@@ -274,7 +274,7 @@ export default function TrackScreen({ initialTrackingId }) {
 
             {/* Description quote */}
             <View style={styles.descQuoteBox}>
-              <Text style={styles.descQuoteLabel}>RECORDED SUMMARY</Text>
+              <Text style={styles.descQuoteLabel}>RECORDED GRIEVANCE SUMMARY</Text>
               <Text style={styles.descQuoteText}>
                 {grievance.description}
               </Text>
@@ -297,17 +297,18 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
   },
   searchCard: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
+    ...shadows.card,
   },
   searchLabel: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1,
+    color: colors.brandNavy,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.8,
     marginBottom: spacing.xs,
   },
   searchRow: {
@@ -316,28 +317,29 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.sm + 4,
     color: colors.text,
     fontSize: 14,
     borderWidth: 1,
     borderColor: colors.border,
   },
   searchButton: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.brandNavy,
     borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadows.card,
   },
   searchDisabled: {
     opacity: 0.6,
   },
   searchButtonText: {
-    color: '#000000',
-    fontWeight: '700',
+    color: '#FFFFFF',
+    fontWeight: '800',
     fontSize: 14,
   },
   historyContainer: {
@@ -349,25 +351,27 @@ const styles = StyleSheet.create({
   historyLabel: {
     color: colors.textMuted,
     fontSize: 11,
+    fontWeight: '600',
   },
   historyList: {
     flexDirection: 'row',
     gap: spacing.xs,
   },
   historyChip: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: colors.border,
   },
   historyChipText: {
-    color: colors.textSecondary,
+    color: colors.brandRoyal,
     fontSize: 11,
+    fontWeight: '600',
   },
   errorCard: {
-    backgroundColor: '#2D1515',
+    backgroundColor: '#fff1f2',
     borderColor: colors.danger,
     borderWidth: 1,
     borderRadius: radius.md,
@@ -380,30 +384,32 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   errorText: {
-    color: '#FCA5A5',
+    color: colors.danger,
     fontSize: 13,
     flex: 1,
+    fontWeight: '500',
   },
   resultCard: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border,
     gap: spacing.md,
+    ...shadows.card,
   },
   resultHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.borderLight,
     paddingBottom: spacing.md,
   },
   ticketId: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '700',
+    color: colors.brandNavy,
+    fontSize: 16,
+    fontWeight: '800',
   },
   ticketDate: {
     color: colors.textMuted,
@@ -411,20 +417,19 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   statusBadge: {
-    borderWidth: 1.5,
+    borderWidth: 1,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingVertical: 3,
+    borderRadius: radius.pill,
   },
   statusBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '800',
   },
   metaBox: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: radius.md,
     padding: spacing.md,
   },
@@ -440,13 +445,13 @@ const styles = StyleSheet.create({
   metaVal: {
     color: colors.text,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   timelineTitle: {
-    color: colors.accent,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1,
+    color: colors.brandNavy,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.8,
     marginTop: spacing.xs,
   },
   timeline: {
@@ -455,16 +460,16 @@ const styles = StyleSheet.create({
   timelineRow: {
     flexDirection: 'row',
     gap: spacing.md,
-    minHeight: 52,
+    minHeight: 56,
   },
   stepIndicatorCol: {
     alignItems: 'center',
-    width: 20,
+    width: 22,
   },
   stepDot: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: colors.surface,
     borderWidth: 2,
     borderColor: colors.border,
@@ -477,12 +482,12 @@ const styles = StyleSheet.create({
     borderColor: colors.success,
   },
   stepDotCurrent: {
-    borderColor: colors.accent,
+    borderColor: colors.brandRoyal,
     backgroundColor: colors.surface,
   },
   checkMark: {
-    color: '#000000',
-    fontSize: 10,
+    color: '#FFFFFF',
+    fontSize: 11,
     fontWeight: '900',
   },
   stepLine: {
@@ -499,35 +504,40 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   stepLabel: {
-    color: colors.textSecondary,
+    color: colors.textMuted,
     fontSize: 13,
     fontWeight: '600',
   },
-  stepLabelCurrent: {
-    color: colors.accent,
+  stepLabelPassed: {
+    color: colors.text,
     fontWeight: '700',
+  },
+  stepLabelCurrent: {
+    color: colors.brandRoyal,
+    fontWeight: '800',
   },
   stepDesc: {
     color: colors.textMuted,
     fontSize: 11,
-    marginTop: 1,
+    marginTop: 2,
+    lineHeight: 16,
   },
   descQuoteBox: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: radius.md,
     padding: spacing.md,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.accent,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.brandNavy,
   },
   descQuoteLabel: {
-    color: colors.textMuted,
+    color: colors.brandRoyal,
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
     marginBottom: 4,
   },
   descQuoteText: {
     color: colors.textSecondary,
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 19,
   },
 });

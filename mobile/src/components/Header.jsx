@@ -1,65 +1,82 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { colors, spacing, radius } from '../theme';
+import { View, Text, StyleSheet } from 'react-native';
+import { colors, spacing, radius, shadows } from '../theme';
 
 export default function Header({ title, subtitle, rightElement }) {
   return (
     <View style={styles.container}>
-      <View style={styles.titleWrap}>
+      <View style={styles.topBar}>
         <View style={styles.brandRow}>
-          <View style={styles.accentDot} />
-          <Text style={styles.brand}>PURAVANKARA</Text>
+          <Text style={styles.brandName}>PURAVANKARA</Text>
+          <View style={styles.grmBadge}>
+            <Text style={styles.grmText}>GRM</Text>
+          </View>
         </View>
+
+        {rightElement ? <View style={styles.rightWrap}>{rightElement}</View> : null}
+      </View>
+
+      <View style={styles.titleWrap}>
         <Text style={styles.title}>{title}</Text>
         {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       </View>
-      {rightElement ? <View style={styles.rightWrap}>{rightElement}</View> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    backgroundColor: colors.surface,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.md,
-    backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    ...shadows.card,
+  },
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  titleWrap: {
-    flex: 1,
+    marginBottom: spacing.xs + 2,
   },
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
+    gap: 8,
   },
-  accentDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: colors.accent,
-  },
-  brand: {
-    color: colors.accent,
-    fontSize: 11,
-    fontWeight: '700',
+  brandName: {
+    color: colors.brandNavy,
+    fontSize: 16,
+    fontWeight: '900',
     letterSpacing: 1.5,
+  },
+  grmBadge: {
+    backgroundColor: colors.brandRed,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radius.xs,
+  },
+  grmText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  titleWrap: {
+    marginTop: 2,
   },
   title: {
     color: colors.text,
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 21,
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
   subtitle: {
     color: colors.textMuted,
     fontSize: 12,
     marginTop: 2,
+    lineHeight: 16,
   },
   rightWrap: {
     marginLeft: spacing.md,

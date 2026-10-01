@@ -9,14 +9,14 @@ import {
   Platform,
 } from 'react-native';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
-import { colors, radius, spacing } from './src/theme';
+import { colors, radius, spacing, shadows } from './src/theme';
 import PolicyAssistantScreen from './src/screens/PolicyAssistantScreen';
 import LodgeScreen from './src/screens/LodgeScreen';
 import TrackScreen from './src/screens/TrackScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 
 const TABS = [
-  { id: 'assistant', label: 'Assistant', icon: '💬' },
+  { id: 'assistant', label: 'Purva AI', icon: '🤖' },
   { id: 'lodge', label: 'Lodge', icon: '📋' },
   { id: 'track', label: 'Track', icon: '🔍' },
   { id: 'profile', label: 'Settings', icon: '⚙️' },
@@ -39,7 +39,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ExpoStatusBar style="light" />
+      <ExpoStatusBar style="dark" />
       <View style={styles.container}>
         {/* Active Screen */}
         <View style={styles.screenContainer}>
@@ -58,7 +58,7 @@ export default function App() {
           {activeTab === 'profile' && <ProfileScreen />}
         </View>
 
-        {/* Bottom Tab Bar */}
+        {/* Bottom Tab Navigation */}
         <View style={styles.tabBar}>
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
@@ -73,6 +73,7 @@ export default function App() {
                 <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
                   {tab.label}
                 </Text>
+                {isActive && <View style={styles.activeIndicator} />}
               </TouchableOpacity>
             );
           })}
@@ -102,19 +103,20 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     paddingVertical: spacing.xs,
     paddingBottom: Platform.OS === 'ios' ? spacing.md : spacing.xs,
+    ...shadows.card,
   },
   tabButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
+    paddingVertical: 5,
+    position: 'relative',
   },
   tabButtonActive: {
-    backgroundColor: 'rgba(59, 130, 246, 0.08)',
-    borderRadius: radius.md,
+    backgroundColor: 'transparent',
   },
   tabIcon: {
-    fontSize: 20,
+    fontSize: 19,
     marginBottom: 2,
   },
   tabLabel: {
@@ -123,7 +125,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tabLabelActive: {
-    color: colors.accent,
-    fontWeight: '700',
+    color: colors.brandNavy,
+    fontWeight: '800',
+  },
+  activeIndicator: {
+    width: 18,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: colors.brandRed,
+    marginTop: 3,
   },
 });
