@@ -44,18 +44,27 @@ export default function App() {
         {/* Active Screen */}
         <View style={styles.screenContainer}>
           {activeTab === 'assistant' && (
-            <PolicyAssistantScreen onNavigateToLodge={handleNavigateToLodge} />
+            <PolicyAssistantScreen
+              onNavigateToLodge={handleNavigateToLodge}
+              onSelectTicket={handleNavigateToTrack}
+            />
           )}
           {activeTab === 'lodge' && (
             <LodgeScreen
               prefill={lodgePrefill}
               onTrackId={handleNavigateToTrack}
+              onSelectTicket={handleNavigateToTrack}
             />
           )}
           {activeTab === 'track' && (
-            <TrackScreen initialTrackingId={trackInitialId} />
+            <TrackScreen
+              initialTrackingId={trackInitialId}
+              onSelectTicket={handleNavigateToTrack}
+            />
           )}
-          {activeTab === 'profile' && <ProfileScreen />}
+          {activeTab === 'profile' && (
+            <ProfileScreen onSelectTicket={handleNavigateToTrack} />
+          )}
         </View>
 
         {/* Bottom Tab Navigation */}

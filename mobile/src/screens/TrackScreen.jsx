@@ -23,7 +23,7 @@ const STATUS_STAGES = [
   { key: 'Resolved', label: 'Resolved & Closed', desc: 'Formal remedy executed and verified under compliance' },
 ];
 
-export default function TrackScreen({ initialTrackingId }) {
+export default function TrackScreen({ initialTrackingId, onSelectTicket }) {
   const [searchId, setSearchId] = useState(initialTrackingId || '');
   const [isLoading, setIsLoading] = useState(false);
   const [grievance, setGrievance] = useState(null);
@@ -122,6 +122,7 @@ export default function TrackScreen({ initialTrackingId }) {
       <Header
         title="Track Grievance"
         subtitle="Transparent Multi-Stage Resolution Journey"
+        onSelectTicket={onSelectTicket}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>

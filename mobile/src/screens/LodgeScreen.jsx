@@ -48,7 +48,7 @@ const DEPARTMENTS = [
   'Engineering / IT',
 ];
 
-export default function LodgeScreen({ prefill, onTrackId }) {
+export default function LodgeScreen({ prefill, onTrackId, onSelectTicket }) {
   const [category, setCategory] = useState('internal');
   const [department, setDepartment] = useState('HR');
   const [isAnonymous, setIsAnonymous] = useState(false);
@@ -148,7 +148,11 @@ export default function LodgeScreen({ prefill, onTrackId }) {
   if (submittedGrievanceId) {
     return (
       <View style={styles.container}>
-        <Header title="Grievance Registered" subtitle="Puravankara Compliance & Resolution" />
+        <Header
+          title="Grievance Registered"
+          subtitle="Puravankara Compliance & Resolution"
+          onSelectTicket={onSelectTicket}
+        />
         <View style={styles.successContainer}>
           <View style={styles.successIconBox}>
             <Text style={styles.successCheck}>✓</Text>
@@ -191,6 +195,7 @@ export default function LodgeScreen({ prefill, onTrackId }) {
       <Header
         title="Lodge Grievance"
         subtitle="Confidential, Secure & Time-Bound Resolution"
+        onSelectTicket={onSelectTicket}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>

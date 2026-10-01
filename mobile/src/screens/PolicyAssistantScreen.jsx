@@ -22,7 +22,7 @@ const SUGGESTED_PROMPTS = [
   'Who investigates high severity cases?',
 ];
 
-export default function PolicyAssistantScreen({ onNavigateToLodge }) {
+export default function PolicyAssistantScreen({ onNavigateToLodge, onSelectTicket }) {
   const [messages, setMessages] = useState([
     {
       id: 'greeting',
@@ -111,6 +111,7 @@ export default function PolicyAssistantScreen({ onNavigateToLodge }) {
       <Header
         title="Policy Assistant"
         subtitle="RAG Compliance & Policy Guidance"
+        onSelectTicket={onSelectTicket}
       />
 
       {/* Suggested prompts carousel matching website pill buttons */}

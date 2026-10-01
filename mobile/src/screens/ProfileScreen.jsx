@@ -14,7 +14,7 @@ import Header from '../components/Header';
 import { supabase } from '../services/supabase';
 import { getApiBaseUrl, setApiBaseUrl, checkBackendHealth } from '../services/api';
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ onSelectTicket }) {
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -103,6 +103,7 @@ export default function ProfileScreen() {
       <Header
         title="Settings & Account"
         subtitle="Supabase Authentication & Server Settings"
+        onSelectTicket={onSelectTicket}
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
