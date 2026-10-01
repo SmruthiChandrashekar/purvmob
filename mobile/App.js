@@ -10,26 +10,28 @@ import {
 } from 'react-native';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { colors, radius, spacing, shadows } from './src/theme';
+import HomeScreen from './src/screens/HomeScreen';
 import PolicyAssistantScreen from './src/screens/PolicyAssistantScreen';
 import LodgeScreen from './src/screens/LodgeScreen';
 import TrackScreen from './src/screens/TrackScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 
 const TABS = [
+  { id: 'home', label: 'Home', icon: '🏛️' },
   { id: 'assistant', label: 'Purva AI', icon: '🤖' },
   { id: 'lodge', label: 'Lodge', icon: '📋' },
   { id: 'track', label: 'Track', icon: '🔍' },
-  { id: 'profile', label: 'Settings', icon: '⚙️' },
+  { id: 'profile', label: 'Account', icon: '⚙️' },
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('assistant');
+  const [activeTab, setActiveTab] = useState('home');
   const [lodgePrefill, setLodgePrefill] = useState(null);
   const [trackInitialId, setTrackInitialId] = useState(null);
 
-  const handleNavigateToLodge = (prefillData) => {
-    setLodgePrefill(prefillData);
-    setActiveTab('lodge');
+  const handleNavigate = (tabName, prefillData = null) => {
+    if (prefillData) setLodgePrefill(prefillData);
+    setActiveTab(tabName);
   };
 
   const handleNavigateToTrack = (trackingId) => {
@@ -41,11 +43,17 @@ export default function App() {
     <SafeAreaView style={styles.safeArea}>
       <ExpoStatusBar style="dark" />
       <View style={styles.container}>
-        {/* Active Screen */}
+        {/* Active Screen View */}
         <View style={styles.screenContainer}>
+          {activeTab === 'home' && (
+            <HomeScreen
+              onNavigate={handleNavigate}
+              onSelectTicket={handleNavigateToTrack}
+            />
+          )}
           {activeTab === 'assistant' && (
             <PolicyAssistantScreen
-              onNavigateToLodge={handleNavigateToLodge}
+              onNavigateToLodge={(data) => handleNavigate('lodge', data)}
               onSelectTicket={handleNavigateToTrack}
             />
           )}
@@ -67,7 +75,7 @@ export default function App() {
           )}
         </View>
 
-        {/* Bottom Tab Navigation */}
+        {/* Bottom Tab Navigation Bar */}
         <View style={styles.tabBar}>
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
@@ -125,11 +133,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   tabIcon: {
-    fontSize: 19,
+    fontSize: 18,
     marginBottom: 2,
   },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: colors.textMuted,
     fontWeight: '600',
   },
@@ -138,7 +146,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   activeIndicator: {
-    width: 18,
+    width: 16,
     height: 3,
     borderRadius: 2,
     backgroundColor: colors.brandRed,
